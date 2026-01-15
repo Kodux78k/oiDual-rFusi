@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dual.Infodose · Mini Módulo Chat Cinematográfico</title>
+  <meta name="theme-color" content="#050715" />
+
+  <style>
+    :root {
+      --bg: radial-gradient(circle at 20% 20%, #121926, #050811 60%, #000000 100%);
+      --text: #e4ecff;
+      --accent: #00f5ff;
+      --accent-soft: rgba(0, 245, 255, .18);
+      --accent-pink: #ff4bff;
+      --danger: #ff4b6b;
+      --radius-card: 18px;
+      --radius-pill: 999px;
+      --shadow-soft: 0 18px 40px rgba(0,0,0,.65);
+      --fast: .25s;
+      --med: .6s;
+      --slow: 1.4s;
+    }
+
+    * { box-sizing:border-box; margin:0; padding:0; }
+
+    html, body {
+      width:100%;
+      height:100%;
+      margin:0;
+      padding:0 16px 96px;
+      background:var(--bg);
+      color:var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+    }
+
+    .dual-chat-module {
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: calc(69px + env(safe-area-inset-bottom));
+      width: min(520px, calc(100% - 32px));
+      max-width: 520px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      z-index: 1200;
+      transition: transform .22s ease, opacity .18s ease;
+      box-sizing:border-box;
+    }
+
+    .dual-chat-module.collapsed {
+      transform: translateX(-50%) translateY(6px);
+    }
+
+    .dual-chat-title { font-size:.9rem; letter-spacing:.12em; text-transform:uppercase; opacity:.75; margin-bottom:2px; }
+    .dual-chat-subtitle { font-size:.8rem; opacity:.8; margin-bottom:4px; }
+
+    .response-container {
+      border-radius:20px;
+      background: radial-gradient(circle at 0 0, rgba(0,255,255,.14), rgba(0,0,0,.86));
+      backdrop-filter: blur(14px) saturate(160%);
+      box-shadow: var(--shadow-soft);
+      padding:12px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      max-height:60vh;
+      overflow-y:auto;
+      animation: fadeInUp var(--slow) ease forwards;
+    }
+
+    @keyframes fadeInUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+
+    .pages-wrapper { width:100%; display:flex; flex-direction:column; gap:10px; }
+    .page { display:none; opacity:0; transition:opacity var(--med) ease; }
+    .page.active { display:block; opacity:1; }
+    .page.initial { min-height:90px; display:flex; align-items:center; justify-content:center; text-align:center; }
+
+    #bootText { font-weight:700; position:relative; letter-spacing:.03em; }
+    #bootText.pulse::after {
+      content: attr(data-text);
+      position:absolute; inset:0;
+      background:linear-gradient(42deg,#0ff,#f0f);
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+      filter:blur(4px); opacity:.45; pointer-events:none; animation:pulseGlow 3s ease-in-out infinite;
+    }
+    @keyframes pulseGlow { 0%,100% { opacity:0.4; } 50% { opacity:0.9; } }
+
+    .response-block { margin:.35rem 0; padding:1rem 1.1rem; border-radius:14px; line-height:1.7; font-size:.9rem; position:relative; overflow:hidden; border:1px solid rgba(255,255,255,.04); transition: box-shadow var(--fast), transform var(--fast), border-color var(--fast), background var(--fast); cursor:default; background: linear-gradient(135deg, rgba(255,255,255,.02), rgba(6,10,28,.95)); }
+    .response-block:hover { transform:translateY(-1px); box-shadow:0 12px 30px rgba(0,0,0,.7); border-color:rgba(0,255,255,.3); }
+    .response-block.intro { background:linear-gradient(135deg, rgba(0,255,255,.18), rgba(0,40,70,.9)); }
+    .response-block.middle { background:linear-gradient(135deg, rgba(255,255,255,.04), rgba(6,10,28,.95)); }
+    .response-block.ending { background:linear-gradient(135deg, rgba(255,0,255,.18), rgba(40,0,60,.95)); }
+
+    .response-block h1, .response-block h2, .response-block h3 { margin-bottom:.2rem; }
+    .response-block h3 { font-size:.95rem; }
+
+    .response-block code { font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New"; font-size:.8rem; padding:.15rem .32rem; border-radius:6px; background:rgba(0,0,0,.5); }
+
+    .response-block ul { padding-left:18px; margin:.35rem 0; }
+    .response-block li { margin-bottom:2px; }
+
+    .lv-callout { border-radius:12px; padding:6px 8px; margin:4px 0; font-size:.8rem; line-height:1.5; }
+    .lv-callout.info { border:1px solid rgba(0,255,255,.45); background:rgba(0,255,255,.06); }
+    .lv-callout.warn { border:1px solid rgba(255,200,0,.6); background:rgba(255,200,0,.06); }
+    .lv-callout.success { border:1px solid rgba(0,255,160,.6); background:rgba(0,255,160,.06); }
+    .lv-callout.question { border:1px solid rgba(180,140,255,.7); background:rgba(180,140,255,.06); }
+    .lv-callout.aside { border:1px dashed rgba(255,255,255,.4); background:rgba(255,255,255,.03); }
+
+    .footer-text { margin-top:4px; padding:6px 10px; font-size:.78rem; text-align:center; opacity:.8; border-radius:999px; border:1px solid rgba(255,255,255,.16); background:rgba(0,0,0,.65); cursor:pointer; transition:opacity var(--fast), transform var(--fast), box-shadow var(--fast), background var(--fast); display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+    .footer-dot { width:6px; height:6px; border-radius:50%; background:linear-gradient(45deg,#0ff,#f0f); box-shadow:0 0 12px rgba(0,255,255,.7); }
+    .footer-text:hover { opacity:.95; transform:scale(1.02); box-shadow:0 0 18px rgba(0,255,255,.35); background:rgba(0,0,0,.9); }
+
+    .response-controls { margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,.12); display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:.8rem; }
+    .control-buttons, .pagination { display:flex; align-items:center; gap:8px; }
+
+    .icon-btn { width:30px; height:30px; border-radius:50%; border:none; background:rgba(0,0,0,.7); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background var(--fast), transform var(--fast), opacity var(--fast); opacity:.85; color:var(--accent); font-size:.8rem; }
+    .icon-btn:hover { background:rgba(255,255,255,.12); transform:translateY(-1px); opacity:1; }
+
+    .pagination button { border:none; background:none; font-size:1.1rem; cursor:pointer; background:linear-gradient(45deg,#0ff,#f0f); -webkit-background-clip:text; -webkit-text-fill-color:transparent; transition:transform var(--fast), opacity var(--fast); opacity:.8; }
+    .pagination button:hover { transform:scale(1.15); opacity:1; }
+
+    #pageIndicator { font-size:.78rem; opacity:.8; }
+
+    #iaConfigPanel { margin-top:6px; padding:8px 10px; border-radius:16px; background:rgba(0, 8, 20, .96); border:1px solid rgba(0,255,255,.24); box-shadow:0 8px 24px rgba(0,0,0,.5); font-size:.78rem; display:none; flex-direction:column; gap:6px; }
+    #iaConfigPanel.active { display:flex; }
+
+    #iaConfigHeader { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    #iaConfigHeader span { font-size:.78rem; text-transform:uppercase; letter-spacing:.08em; opacity:.9; }
+
+    .ia-close-btn{ border:none; border-radius:999px; background:rgba(0,0,0,.7); color:rgba(255,255,255,.9); width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:.8rem; cursor:pointer; box-shadow:0 0 0 1px rgba(255,255,255,.25); transition:background .2s, box-shadow .2s, transform .2s; }
+    .ia-close-btn:hover{ background:rgba(255,255,255,.12); box-shadow:0 0 10px rgba(0,255,255,.5); transform:translateY(-1px); }
+
+    .ia-config-body { display:flex; flex-direction:column; gap:6px; margin-top:4px; }
+    .ia-field { display:flex; flex-direction:column; gap:3px; }
+    .ia-field label { font-size:.72rem; opacity:.8; }
+    .ia-field input, .ia-field select { width:100%; border-radius:8px; border:1px solid rgba(0,255,255,.3); background:rgba(0,0,0,.7); color:inherit; padding:5px 7px; font-size:.78rem; outline:none; }
+    .ia-field input::placeholder { color:rgba(255,255,255,.38); }
+
+    .ia-actions { display:flex; gap:6px; margin-top:4px; }
+    .pill-btn { flex:1; border-radius:999px; border:1px solid rgba(0,255,255,.6); background:transparent; padding:5px 0; font-size:.78rem; cursor:pointer; color:var(--accent); transition:background var(--fast), color var(--fast), transform var(--fast); }
+    .pill-btn:hover { background:var(--accent); color:#050515; transform:translateY(-1px); }
+    .pill-btn.secondary { border-color:rgba(255,255,255,.35); color:rgba(255,255,255,.8); }
+    .pill-btn.secondary:hover { background:rgba(255,255,255,.12); color:#fff; }
+
+    .ia-status { font-size:.7rem; opacity:.8; margin-top:2px; }
+    .ia-status.ok { color:#63f8ba; }
+    .ia-status.warn { color:#ffd480; }
+    .ia-status.err { color:var(--danger); }
+
+    .input-container { display:flex; gap:8px; align-items:center; }
+    #userInput { flex:1; min-width:0; padding:11px 12px; border-radius:999px; border:1px solid rgba(255,255,255,.16); background:rgba(0,0,0,.7); color:inherit; font-size:.95rem; outline:none; transition:border-color var(--fast), background var(--fast), box-shadow var(--fast); }
+    #userInput::placeholder { color:rgba(255,255,255,.35); }
+    #userInput:focus { border-color:rgba(0,255,255,.65); background:rgba(0,0,0,.9); box-shadow:0 0 0 1px rgba(0,255,255,.45); }
+
+    #sendBtn { width:50px; height:50px; border-radius:50%; border:none; background:conic-gradient(from 120deg,#0ff,#f0f,#0ff); display:flex; align-items:center; justify-content:center; font-size:1.4rem; color:#050515; cursor:pointer; box-shadow:0 0 18px rgba(0,255,255,.55); transition:transform var(--fast), box-shadow var(--fast); }
+    #sendBtn:hover { transform:translateY(-1px) scale(1.04); box-shadow:0 0 26px rgba(0,255,255,.8); }
+
+    #voiceBtn { width:46px; height:46px; border-radius:50%; border:none; background:rgba(0,0,0,.75); display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 0 0 1px rgba(255,255,255,.08); transition:transform var(--fast), box-shadow var(--fast), background var(--fast); color:var(--accent); font-size:1rem; }
+    #voiceBtn:hover { transform:translateY(-1px); box-shadow:0 0 18px rgba(0,255,255,.45); background:rgba(0,0,0,.95); }
+    #voiceBtn.recording { box-shadow:0 0 22px rgba(0,255,180,.8); background:radial-gradient(circle at 30% 0, rgba(0,255,180,.7), rgba(0,0,0,.9)); }
+
+    .dual-chat-module.collapsed .pages-wrapper,
+    .dual-chat-module.collapsed .response-controls,
+    .dual-chat-module.collapsed #iaConfigPanel { display:none; }
+    .dual-chat-module.collapsed .response-container { padding:6px 10px; }
+    .dual-chat-module.collapsed .footer-text { margin-top:0; font-size:.78rem; }
+    .dual-chat-module.collapsed .input-container { display:none; }
+
+    .response-container::-webkit-scrollbar { width:4px; }
+    .response-container::-webkit-scrollbar-thumb { background:rgba(255,255,255,.35); border-radius:999px; }
+
+    @media (max-width:420px){
+      .dual-chat-module { width: calc(100% - 24px); left: 50%; transform: translateX(-50%); }
+      .response-container { max-height:50vh; padding:10px; }
+      #sendBtn { width:44px; height:44px; font-size:1.1rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="dual-chat-module" id="dualChatModule" aria-live="polite">
+    <div class="response-container" id="response" role="log" aria-atomic="false">
+      <div class="pages-wrapper" id="pagesWrapper">
+        <div class="page initial active" data-page-index="0">
+          <strong id="bootText" class="pulse" data-text="🧬 Iniciando. Pulso simbiótico detectado. Presença reconhecida.">
+            🧬 Iniciando. Pulso simbiótico detectado. Presença reconhecida.
+          </strong>
+        </div>
+      </div>
+
+      <p class="footer-text" id="footerHint" role="button" tabindex="0">
+        <span class="footer-dot" aria-hidden="true"></span>
+        Do seu jeito. Sempre único. Sempre seu.
+      </p>
+
+      <div class="response-controls" aria-hidden="false">
+        <div class="control-buttons">
+          <button class="icon-btn" id="copyBtn" type="button" title="Copiar resposta" aria-label="Copiar resposta">⧉</button>
+          <button class="icon-btn" id="pasteBtn" type="button" title="Colar no input" aria-label="Colar do clipboard">⧠</button>
+          <button class="icon-btn" id="toggleSettingsBtn" type="button" title="Configurar IA" aria-label="Abrir configurações">⚙</button>
+        </div>
+        <div class="pagination" role="navigation" aria-label="Paginação de respostas">
+          <button id="pagePrev" type="button" aria-label="Página anterior">⟵</button>
+          <span id="pageIndicator">1 / 1</span>
+          <button id="pageNext" type="button" aria-label="Próxima página">⟶</button>
+        </div>
+      </div>
+
+      <div id="iaConfigPanel" aria-hidden="true">
+        <div id="iaConfigHeader">
+          <span>Config IA · OpenRouter</span>
+          <button type="button" class="ia-close-btn" id="closeIaConfigPanelBtn" aria-label="Fechar">✕</button>
+        </div>
+        <div class="ia-config-body">
+          <div class="ia-field">
+            <label for="apiKeyInput">API Key (sk-or-...)</label>
+            <input id="apiKeyInput" type="password" placeholder="Cole sua chave OpenRouter aqui" autocomplete="off" />
+          </div>
+          <div class="ia-field">
+            <label for="modelSelect">Modelo</label>
+            <select id="modelSelect">
+              <option value="deepseek/deepseek-chat-v3-0324:free">deepseek-v3 · free</option>
+              <option value="meta-llama/llama-3.1-70b-instruct:free">Llama 3.1 70B · free</option>
+              <option value="openai/gpt-4.1-mini">GPT-4.1 mini</option>
+              <option value="openai/gpt-4.1">GPT-4.1</option>
+              <option value="custom">Custom (digitar abaixo)</option>
+            </select>
+          </div>
+          <div class="ia-field">
+            <label for="customModelInput">Modelo custom (opcional)</label>
+            <input id="customModelInput" type="text" placeholder="ex: openai/gpt-4.1-mini" />
+          </div>
+          <div class="ia-actions">
+            <button class="pill-btn" id="saveIaConfigBtn" type="button">Salvar</button>
+            <button class="pill-btn secondary" id="clearIaConfigBtn" type="button">Limpar</button>
+          </div>
+          <div class="ia-status" id="iaStatus">Nenhuma chave salva ainda.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-container" role="form" aria-label="Entrada de mensagem">
+      <input id="userInput" type="text" placeholder="Diga: 'oi, Dual'." aria-label="Digite sua mensagem" />
+      <button id="sendBtn" type="button" title="Enviar" aria-label="Enviar mensagem">➤</button>
+      <button id="voiceBtn" type="button" title="Falar" aria-label="Ativar reconhecimento de voz">🔘</button>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      let didInit = false;
+
+      const STORAGE = {
+        OPENROUTER_KEY: 'hub1.dual.openrouter_key',
+        OPENROUTER_MODEL: 'hub1.dual.openrouter_model'
+      };
+
+      const DEFAULTS = {
+        API_URL: 'https://openrouter.ai/api/v1/chat/completions',
+        MODEL:   'deepseek/deepseek-chat-v3-0324:free',
+        TEMP:    0.2
+      };
+
+      let CONFIG = {
+        API_URL: DEFAULTS.API_URL,
+        MODEL: DEFAULTS.MODEL,
+        TEMP:  DEFAULTS.TEMP,
+        AUTH_TOKEN: ''
+      };
+
+      const $  = s => document.querySelector(s);
+      const $$ = s => Array.from(document.querySelectorAll(s));
+
+      const moduleRoot     = $('#dualChatModule');
+      const responseContainer = $('#response');
+      const pagesWrapper   = $('#pagesWrapper');
+      const footerHint     = $('#footerHint');
+      const copyBtn        = $('#copyBtn');
+      const pasteBtn       = $('#pasteBtn');
+      const toggleSettingsBtn = $('#toggleSettingsBtn');
+      const iaConfigPanel  = $('#iaConfigPanel');
+      const closeIaConfigPanelBtn = $('#closeIaConfigPanelBtn');
+      const apiKeyInput    = $('#apiKeyInput');
+      const modelSelect    = $('#modelSelect');
+      const customModelInput = $('#customModelInput');
+      const saveIaConfigBtn  = $('#saveIaConfigBtn');
+      const clearIaConfigBtn = $('#clearIaConfigBtn');
+      const iaStatus       = $('#iaStatus');
+      const pagePrev       = $('#pagePrev');
+      const pageNext       = $('#pageNext');
+      const pageIndicator  = $('#pageIndicator');
+      const userInput      = $('#userInput');
+      const sendBtn        = $('#sendBtn');
+      const voiceBtn       = $('#voiceBtn');
+
+      let pages = [];
+      let currentPage = 0;
+      let isCollapsed = false;
+      let conversation = [];
+      let recognition = null;
+      let isRecording = false;
+      let interimTimer = null;
+
+      function emitToHost(type, payload){
+        try {
+          window.parent?.postMessage({ source: 'hub1.dual.infodose', type, payload }, '*');
+        }catch(e){}
+      }
+
+      // ===== Livro Vivo parser (auto) =====
+      function parseMarkdownBasic(text){
+        if (!text) return '';
+        let out = text;
+        out = out.replace(/^### (.*)$/gim, '<h3>$1</h3>');
+        out = out.replace(/^## (.*)$/gim, '<h2>$1</h2>');
+        out = out.replace(/^# (.*)$/gim, '<h1>$1</h1>');
+        out = out.replace(/^> (.*)$/gim, '<blockquote>$1</blockquote>');
+        out = out.replace(/`([^`]+)`/g, '<code>$1</code>');
+        out = out.replace(/^\s*[-*+] (.*)$/gim, '<li>$1</li>');
+        out = out.replace(/(<li>.*<\/li>)/gims, '<ul>$1</ul>');
+        return out;
+      }
+
+      function parseLivroVivo(text){
+        if (!text) return '';
+        let out = text;
+        out = out.replace(/^::(info|warn|success|question|aside)\s+(.*)$/gim,
+          function(_m, type, rest){
+            return '<div class="lv-callout ' + type + '">' + rest + '</div>';
+          });
+        out = parseMarkdownBasic(out);
+        return out.replace(/\n/g, '<br/>');
+      }
+
+      function buildCinematicBlocks(text){
+        const parts = text.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+        if (!parts.length){
+          return [{
+            kind:'middle',
+            html:'<p>' + parseLivroVivo(text) + '</p>'
+          }];
+        }
+        const blocks = parts.map((p,idx) => {
+          const kind = idx === 0 ? 'intro' : (idx === parts.length - 1 ? 'ending' : 'middle');
+          const html = parseLivroVivo(p);
+          return { kind, html };
+        });
+        return blocks.slice(0,3);
+      }
+
+      // ===== IA config =====
+      function loadIaConfig(){
+        const key   = localStorage.getItem(STORAGE.OPENROUTER_KEY) || '';
+        const model = localStorage.getItem(STORAGE.OPENROUTER_MODEL) || DEFAULTS.MODEL;
+
+        CONFIG.API_URL = DEFAULTS.API_URL;
+        CONFIG.MODEL   = model || DEFAULTS.MODEL;
+        CONFIG.TEMP    = DEFAULTS.TEMP;
+        CONFIG.AUTH_TOKEN = key ? 'Bearer ' + key : '';
+
+        apiKeyInput.value = key;
+        let found = false;
+        Array.from(modelSelect.options).forEach(opt => {
+          if (opt.value === model){ found = true; modelSelect.value = model; }
+        });
+        if (!found){
+          modelSelect.value = 'custom';
+          customModelInput.value = model;
+        }
+
+        if (!key){
+          iaStatus.textContent = 'Nenhuma chave salva ainda.';
+          iaStatus.className = 'ia-status warn';
+          iaConfigPanel.setAttribute('aria-hidden','false');
+        } else {
+          iaStatus.textContent = 'Config carregada. Pronto para chamar a IA.';
+          iaStatus.className = 'ia-status ok';
+          iaConfigPanel.setAttribute('aria-hidden','true');
+        }
+      }
+
+      function saveIaConfig(){
+        let key = apiKeyInput.value.trim();
+        let model = modelSelect.value;
+        if (model === 'custom'){
+          const c = customModelInput.value.trim();
+          if (c) model = c;
+        }
+        if (!model) model = DEFAULTS.MODEL;
+
+        if (!key){
+          iaStatus.textContent = 'Cole uma chave sk-or-... para salvar.';
+          iaStatus.className = 'ia-status warn';
+          return;
+        }
+
+        try{
+          localStorage.setItem(STORAGE.OPENROUTER_KEY, key);
+          localStorage.setItem(STORAGE.OPENROUTER_MODEL, model);
+        }catch(e){ console.error(e); }
+
+        CONFIG.AUTH_TOKEN = 'Bearer ' + key;
+        CONFIG.MODEL = model;
+        iaStatus.textContent = 'Config salva com sucesso.';
+        iaStatus.className = 'ia-status ok';
+        emitToHost('hub1.dual.configSaved', { model: CONFIG.MODEL });
+      }
+
+      function clearIaConfig(){
+        try{
+          localStorage.removeItem(STORAGE.OPENROUTER_KEY);
+          localStorage.removeItem(STORAGE.OPENROUTER_MODEL);
+        }catch(e){ console.error(e); }
+        apiKeyInput.value = '';
+        customModelInput.value = '';
+        modelSelect.value = DEFAULTS.MODEL;
+        CONFIG.AUTH_TOKEN = '';
+        CONFIG.MODEL = DEFAULTS.MODEL;
+        iaStatus.textContent = 'Config limpa. Defina novamente antes de enviar.';
+        iaStatus.className = 'ia-status warn';
+        emitToHost('hub1.dual.configCleared', {});
+      }
+
+      // ===== Páginas =====
+      function updatePageIndicator(){
+        const total = pages.length || 1;
+        const current = Math.min(currentPage + 1, total);
+        pageIndicator.textContent = current + ' / ' + total;
+      }
+
+      function showPage(idx){
+        const list = $$('.page');
+        list.forEach(p => p.classList.remove('active'));
+        const target = list[idx];
+        if (target){
+          target.classList.add('active');
+          currentPage = idx;
+          // ensure active page block is visible
+          const block = target.querySelector('.response-block');
+          if (block && typeof block.scrollIntoView === 'function'){
+            try { block.scrollIntoView({ behavior:'smooth', block:'center' }); }catch(e){}
+          }
+        }
+        updatePageIndicator();
+      }
+
+      function renderPagesFromData(data){
+        // defensive: cap number of pages to avoid UI overload
+        const CAP = 50;
+        const clipped = Array.isArray(data) ? data.slice(0, CAP) : [];
+        const existing = $$('.page');
+        existing.forEach(p => p.remove());
+
+        clipped.forEach((page,idx) => {
+          const div = document.createElement('div');
+          div.className = 'page' + (idx === 0 ? ' active' : '');
+          div.dataset.pageIndex = String(idx);
+
+          const block = document.createElement('div');
+          block.className = 'response-block ' + (page.kind || 'middle');
+          block.innerHTML = page.html;
+
+          div.appendChild(block);
+          pagesWrapper.appendChild(div);
+        });
+
+        pages = clipped.slice();
+        currentPage = 0;
+        updatePageIndicator();
+
+        // bring container to top and ensure first page visible
+        try { responseContainer.scrollTo({ top: 0, behavior: 'smooth' }); }catch(e){ responseContainer.scrollTop = 0; }
+        showPage(0);
+
+        emitToHost('hub1.dual.rendered', { pages: pages });
+      }
+
+      pagePrev.addEventListener('click', () => {
+        if (pages.length <= 1) return;
+        const next = (currentPage - 1 + pages.length) % pages.length;
+        showPage(next);
+      });
+      pageNext.addEventListener('click', () => {
+        if (pages.length <= 1) return;
+        const next = (currentPage + 1) % pages.length;
+        showPage(next);
+      });
+
+      // ===== Colapso =====
+      function setCollapsed(state){
+        isCollapsed = state;
+        if (isCollapsed){
+          moduleRoot.classList.add('collapsed');
+        } else {
+          moduleRoot.classList.remove('collapsed');
+        }
+        emitToHost('hub1.dual.collapsed', { collapsed: isCollapsed });
+      }
+
+      footerHint.addEventListener('click', () => {
+        setCollapsed(!isCollapsed);
+      });
+      footerHint.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          setCollapsed(!isCollapsed);
+        }
+      });
+
+      // ===== IA call =====
+      async function callOpenRouter(promptText){
+        if (!CONFIG.AUTH_TOKEN){
+          throw new Error('Defina a chave OpenRouter no painel de Config IA.');
+        }
+
+        const messages = [
+          {
+            role:'system',
+            content:
+`Você é Dual.Infodose, assistente cinematográfico.
+Responda em português, usando blocos que possam virar "Livro Vivo" (Markdown + callouts ::info, ::warn, ::success, ::question, ::aside, listas, títulos).
+Estruture a resposta em:
+1) Recompensa inicial,
+2) Curiosidade no meio,
+3) Convite final.`
+          },
+          { role:'user', content: promptText }
+        ];
+
+        const body = {
+          model: CONFIG.MODEL,
+          temperature: CONFIG.TEMP,
+          messages
+        };
+
+        const res = await fetch(CONFIG.API_URL, {
+          method:'POST',
+          headers:{
+            'Content-Type':'application/json',
+            'Authorization': CONFIG.AUTH_TOKEN
+          },
+          body: JSON.stringify(body)
+        });
+
+        if (!res.ok){
+          const txt = await res.text().catch(()=> '');
+          console.error('Erro IA', res.status, txt);
+          if (res.status === 401 || res.status === 403) {
+            throw new Error('Erro de autenticação: verifique sua chave OpenRouter (401/403).');
+          }
+          throw new Error('Falha na resposta da IA: ' + res.status + ' — ' + (txt || 'sem texto'));
+        }
+
+        const data = await res.json();
+        const choice = data.choices && data.choices[0];
+        const content = choice?.message?.content || '(sem conteúdo retornado)';
+        conversation.push({ role:'user', content: promptText });
+        conversation.push({ role:'assistant', content });
+        return content;
+      }
+
+      // ===== Mic =====
+      function initSpeechRecognition(){
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SR) return null;
+        const r = new SR();
+        r.lang = 'pt-BR';
+        r.continuous = false; // prefer one-shot per click
+        r.interimResults = true; // allow partial transcripts
+        r.maxAlternatives = 1;
+        return r;
+      }
+
+      function setupVoiceBtn(){
+        recognition = initSpeechRecognition();
+        if (!recognition){
+          voiceBtn.addEventListener('click', () => {
+            try{ alert('Reconhecimento de voz não suportado neste navegador. Teste no Chrome/Edge.'); }catch(e){}
+          });
+          return;
+        }
+
+        // handle partial and final results
+        recognition.onresult = (ev) => {
+          // combine interim and final results; keep previous content only if adding to existing input
+          let interim = '';
+          let finalText = '';
+          for (let i = ev.resultIndex; i < ev.results.length; i++){
+            const r = ev.results[i];
+            const t = r[0]?.transcript || '';
+            if (r.isFinal) finalText += t + ' ';
+            else interim += t + ' ';
+          }
+          // if we have final text, append it and clear interim
+          if (finalText.trim()){
+            // append final result to existing userInput (maintain previous typed text)
+            userInput.value = (userInput.value ? userInput.value + ' ' : '') + finalText.trim();
+            // after final result, auto-stop recognition to detect end-of-speech
+            try { recognition.stop(); }catch(e){}
+          } else {
+            // just show interim in the input (do not overwrite finalized typed content)
+            const base = (userInput.value && userInput.value.trim()) ? userInput.value.trim() : '';
+            // show interim separately without permanently changing typed content (we'll set value but not commit)
+            userInput.value = (base ? base + ' ' : '') + interim.trim();
+          }
+        };
+
+        recognition.onspeechstart = () => {
+          isRecording = true;
+          voiceBtn.classList.add('recording');
+        };
+
+        recognition.onspeechend = () => {
+          // when speech ends, we try to stop the recognition gracefully;
+          try { recognition.stop(); }catch(e){}
+        };
+
+        recognition.onerror = (ev) => {
+          console.error('SpeechRecognition error', ev.error);
+          isRecording = false;
+          voiceBtn.classList.remove('recording');
+        };
+
+        recognition.onend = () => {
+          isRecording = false;
+          voiceBtn.classList.remove('recording');
+        };
+
+        voiceBtn.addEventListener('click', () => {
+          if (!recognition) return;
+          if (!isRecording){
+            try {
+              recognition.start();
+              isRecording = true;
+              voiceBtn.classList.add('recording');
+            }catch(e){ console.error(e); }
+          } else {
+            try { recognition.stop(); }catch(e){ console.error(e); }
+          }
+        });
+      }
+
+      // ===== Send =====
+      async function handleSend(){
+        const text = userInput.value.trim();
+        if (!text) return;
+
+        setCollapsed(false);
+
+        const oldFooter = footerHint.textContent;
+        userInput.value = '';
+        userInput.disabled = true;
+        sendBtn.disabled = true;
+        footerHint.textContent = 'Processando pulso...';
+        emitToHost('hub1.dual.sent', { text });
+
+        try{
+          const answer = await callOpenRouter(text);
+          const cinematicBlocks = buildCinematicBlocks(answer);
+          renderPagesFromData(cinematicBlocks);
+          emitToHost('hub1.dual.response', { text: answer, cinematicBlocks });
+        }catch(err){
+          console.error(err);
+          const fallback = [{
+            kind:'ending',
+            html:'<p><strong>Ops.</strong> Não consegui falar com o OpenRouter agora. Verifique sua chave e tente de novo.</p>'
+          }];
+          renderPagesFromData(fallback);
+          emitToHost('hub1.dual.error', { message: (err && err.message) || 'Erro na chamada IA' });
+        }finally{
+          userInput.disabled = false;
+          sendBtn.disabled = false;
+          footerHint.textContent = oldFooter;
+          userInput.focus();
+        }
+      }
+
+      sendBtn.addEventListener('click', handleSend);
+      userInput.addEventListener('keydown', ev => {
+        if (ev.key === 'Enter' && !ev.shiftKey){
+          ev.preventDefault();
+          handleSend();
+        }
+      });
+
+      // Copy / Paste improved
+      copyBtn.addEventListener('click', async () => {
+        const activePageNode = $$('.page')[currentPage];
+        if (!activePageNode) return;
+        const block = activePageNode.querySelector('.response-block');
+        if (!block) return;
+        const text = block.innerText || block.textContent || '';
+        try{
+          if (navigator.clipboard && navigator.clipboard.writeText){
+            await navigator.clipboard.writeText(text);
+          } else {
+            // fallback
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            ta.remove();
+          }
+          footerHint.textContent = 'Resposta copiada.';
+          emitToHost('hub1.dual.copied', { text });
+          setTimeout(()=> footerHint.textContent = 'Do seu jeito. Sempre único. Sempre seu.', 1400);
+        }catch(e){
+          console.error('Clipboard copy failed', e);
+          footerHint.textContent = 'Não consegui copiar automaticamente.';
+          setTimeout(()=> footerHint.textContent = 'Do seu jeito. Sempre único. Sempre seu.', 1400);
+        }
+      });
+
+      pasteBtn.addEventListener('click', async () => {
+        try{
+          let txt = '';
+          if (navigator.clipboard && navigator.clipboard.readText){
+            txt = await navigator.clipboard.readText();
+          } else {
+            // no reliable API -> nothing to do
+          }
+          if (txt) userInput.value = txt;
+        }catch(e){
+          console.error('Falha ao ler clipboard', e);
+        }
+      });
+
+      // Painel IA open/close
+      toggleSettingsBtn.addEventListener('click', () => {
+        iaConfigPanel.classList.toggle('active');
+        const visible = iaConfigPanel.classList.contains('active');
+        iaConfigPanel.setAttribute('aria-hidden', visible ? 'false' : 'true');
+        emitToHost('hub1.dual.settingsToggled', { open: visible });
+      });
+      closeIaConfigPanelBtn.addEventListener('click', () => {
+        iaConfigPanel.classList.remove('active');
+        iaConfigPanel.setAttribute('aria-hidden','true');
+      });
+
+      if (saveIaConfigBtn) saveIaConfigBtn.addEventListener('click', saveIaConfig);
+      if (clearIaConfigBtn) clearIaConfigBtn.addEventListener('click', clearIaConfig);
+
+      // ===== Visual viewport keyboard adjustments =====
+      function adjustForViewportKeyboard(){
+        if (!moduleRoot) return;
+        if (!window.visualViewport) return;
+        const baseBottom = 69;
+        function recalc(){
+          const inset = Math.max(0, Math.round(window.innerHeight - window.visualViewport.height));
+          try{
+            moduleRoot.style.bottom = `calc(${baseBottom}px + ${inset}px + env(safe-area-inset-bottom))`;
+          }catch(e){
+            moduleRoot.style.bottom = (baseBottom + inset) + 'px';
+          }
+        }
+        window.visualViewport.addEventListener('resize', recalc);
+        window.visualViewport.addEventListener('scroll', recalc);
+        recalc();
+      }
+
+      // ===== Messaging from host =====
+      window.addEventListener('message', (ev) => {
+        const data = ev.data || {};
+        if (!data || data.source !== 'hub1.host') return;
+        const { type, payload } = data || {};
+        if (type === 'hub1.dual.setToken'){
+          if (payload && payload.token){
+            CONFIG.AUTH_TOKEN = 'Bearer ' + payload.token;
+            try { localStorage.setItem(STORAGE.OPENROUTER_KEY, payload.token); }catch(e){}
+            loadIaConfig();
+          }
+        }
+        if (type === 'hub1.dual.restore'){
+          if (payload && Array.isArray(payload.pages)){
+            renderPagesFromData(payload.pages);
+          }
+        }
+        if (type === 'hub1.dual.setModel'){
+          if (payload && payload.model){
+            CONFIG.MODEL = payload.model;
+            try { localStorage.setItem(STORAGE.OPENROUTER_MODEL, payload.model); }catch(e){}
+            loadIaConfig();
+          }
+        }
+      }, false);
+
+      function init(){
+        if (didInit) return;
+        didInit = true;
+        loadIaConfig();
+        updatePageIndicator();
+        setCollapsed(false);
+        setupVoiceBtn();
+        adjustForViewportKeyboard();
+        // expose simple API
+        window.Hub1DualInfodose = {
+          sendText: async (txt) => {
+            userInput.value = txt;
+            await handleSend();
+          },
+          setToken: (token) => {
+            CONFIG.AUTH_TOKEN = 'Bearer ' + token;
+            try { localStorage.setItem(STORAGE.OPENROUTER_KEY, token); }catch(e){}
+            loadIaConfig();
+          },
+          restorePages: (pages) => {
+            renderPagesFromData(pages);
+          }
+        };
+      }
+
+      document.addEventListener('DOMContentLoaded', init);
+      if (document.readyState === 'complete' || document.readyState === 'interactive'){
+        init();
+      }
+    })();
+  </script>
+</body>
+</html>
